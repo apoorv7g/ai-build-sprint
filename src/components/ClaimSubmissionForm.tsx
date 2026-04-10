@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import { ClaimInput, ClaimResult, AgentWorkflowStep } from "@/types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -337,10 +338,12 @@ export function ClaimSubmissionForm({
             ) : (
               <div className="relative rounded-lg border border-border/60 overflow-hidden bg-muted/30 p-3">
                 <div className="relative w-full bg-black/10 rounded-md overflow-hidden">
-                  <img
+                  <Image
                     src={imagePreview}
                     alt="Preview"
                     className="w-full h-auto max-h-48 object-contain"
+                    width={400}
+                    height={192}
                   />
                 </div>
                 <div className="mt-3 flex items-center justify-between">

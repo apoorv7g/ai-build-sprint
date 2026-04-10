@@ -10,8 +10,9 @@ import { damageAssessmentAgent } from "@/agents/damageAssessmentAgent";
 import { payoutEstimationAgent } from "@/agents/payoutEstimationAgent";
 import { customerCommunicationAgent } from "@/agents/customerCommunicationAgent";
 import { ClaimInput, ClaimResult } from "@/types";
-import { MODELS, getGroqClient } from "@/lib/groq";
+import { MODELS } from "@/lib/groq";
 import { groqCall } from "@/lib/groqCall";
+import type { Groq } from "groq-sdk";
 
 export async function runClaim(
   userId: string,
@@ -57,10 +58,9 @@ export async function runClaim(
     if (error?.code === "23505" || error?.message?.includes("unique")) {
       const userMessage = await generateErrorMessage(
         "A claim with this ID already exists in our system. Please use a different claim ID or contact support if you believe this is an error.",
-        groqClient,
-        claimSlot
+        groqClient
       );
-      const dbError: any = new Error(userMessage);
+      const dbError = new Error(userMessage) as Error & { status?: number; originalError?: string };
       dbError.status = 409;
       dbError.originalError = "Duplicate claim ID";
       throw dbError;
@@ -69,10 +69,9 @@ export async function runClaim(
     // Generic database error handler
     const userMessage = await generateErrorMessage(
       `Database error occurred while processing your claim: ${error?.message || "Unknown error"}. Please try again later`,
-      groqClient,
-      claimSlot
+      groqClient
     );
-    const dbError: any = new Error(userMessage);
+    const dbError = new Error(userMessage) as Error & { status?: number; originalError?: string };
     dbError.status = 500;
     dbError.originalError = error?.message;
     throw dbError;
@@ -348,7 +347,7 @@ function buildReason(
   return parts.join(" ");
 }
 
-async function generateErrorMessage(dbError: string, groqClient: any, keySlot: number): Promise<string> {
+async function generateErrorMessage(dbError: string, groqClient: Groq): Promise<string> {
   try {
     const response = await groqCall(async () =>
       groqClient.chat.completions.create({
