@@ -170,7 +170,7 @@ export async function POST(
               "- NO markdown tables or ### section headers\n" +
               "- NO dollar signs ($), use ₹ only for currency\n\n" +
               "- REMEMBER deductible IS ALWAYS 3000\n\n" +
-              " ₹3000 is the deductible amount for all claims. not 500 Always factor this into payout explanations and next steps guidance.\n\n" +
+              " ₹3000 is the deductible amount for all claims. not 500 Always factor this into payout explanations and next steps guidance.APPLY ALWAYS IN THE END THAT IS AFTER EVERYTHING IS DONE.\n\n" +
               "- ALSO NO MATH SYMBOLS , OR ANY MATH MARKDOWN OR HIGHTHNG , DO IT WITHOUT IT and no ### AT ALL.\n "+
               "Your expertise: Connect claim data to policy rules, explain decision rationale, provide actionable guidance." +
               claimContext,
