@@ -293,7 +293,7 @@ export function ClaimSubmissionForm({
 
       {(loading || steps.length > 0) && (
         <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ClaimIQ Assistant</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Cache Memory Assistant</p>
           <div className="mt-2 space-y-2">
             <div className="text-sm text-muted-foreground">Interpreting intent, validating policy and computing payout decision.</div>
             <Progress value={completion} />

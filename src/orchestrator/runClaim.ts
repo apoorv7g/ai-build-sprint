@@ -3,7 +3,7 @@ import { calculateConfidence } from "@/lib/confidenceCalculator";
 import { imageUrlToBase64 } from "@/lib/imageUtils";
 import { db } from "@/db";
 import { claims, claim_results } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { claimAnalysisAgent } from "@/agents/claimAnalysisAgent";
 import { coverageAndFraudAgent } from "@/agents/coverageAndFraudAgent";
 import { damageAssessmentAgent } from "@/agents/damageAssessmentAgent";
@@ -12,6 +12,7 @@ import { customerCommunicationAgent } from "@/agents/customerCommunicationAgent"
 import { ClaimInput, ClaimResult } from "@/types";
 
 export async function runClaim(
+  userId: string,
   input: ClaimInput,
   claimSlot: 0 | 1 | 2 = 0
 ): Promise<ClaimResult> {
@@ -38,6 +39,7 @@ export async function runClaim(
   // Insert claim into DB
   try {
     await db.insert(claims).values({
+      user_id: userId,
       claim_id: input.claimId,
       description: input.description,
       policy_type: input.policyType,
@@ -74,6 +76,7 @@ export async function runClaim(
   let analysisResult;
   try {
     analysisResult = await claimAnalysisAgent({
+      userId,
       claimId: input.claimId,
       description: input.description,
       policyType: input.policyType,
@@ -103,12 +106,13 @@ export async function runClaim(
       agentWorkflow: [],
       processingTimeMs,
     };
-    await persistResult(fallback, processingTimeMs, claimSlot);
+    await persistResult(userId, fallback, processingTimeMs, claimSlot);
     return fallback;
   }
 
   // STEP 3 — Coverage + Fraud Check
   const coverageResult = await coverageAndFraudAgent({
+    userId,
     claimId: input.claimId,
     policyType: input.policyType,
     incidentType: analysisResult.incidentType,
@@ -153,6 +157,7 @@ export async function runClaim(
   if (!shouldShortCircuit) {
     // STEP 4 — Damage Assessment
     damageResult = await damageAssessmentAgent({
+      userId,
       claimId: input.claimId,
       description: input.description,
       initialDamageSeverity: analysisResult.initialDamageSeverity,
@@ -169,6 +174,7 @@ export async function runClaim(
 
     // STEP 5 — Payout Estimation
     payoutResult = await payoutEstimationAgent({
+      userId,
       claimId: input.claimId,
       claimAmount: input.claimAmount,
       finalDamageType: damageResult.finalDamageType,
@@ -183,6 +189,7 @@ export async function runClaim(
   // STEP 6 — Customer Communication (always runs)
   const reason = buildReason(analysisResult, coverageResult, damageResult, payoutResult);
   const commResult = await customerCommunicationAgent({
+    userId,
     claimId: input.claimId,
     status: payoutResult.status,
     estimatedPayout: payoutResult.estimatedPayout,
@@ -232,14 +239,14 @@ export async function runClaim(
   };
 
   // STEP 8 — Persist & Return
-  await persistResult(result, processingTimeMs, claimSlot);
+  await persistResult(userId, result, processingTimeMs, claimSlot);
 
   // Fetch agent logs for the workflow
   const { agent_logs: agentLogsTable } = await import("@/db/schema");
   const logs = await db
     .select()
     .from(agentLogsTable)
-    .where(eq(agentLogsTable.claim_id, input.claimId));
+    .where(and(eq(agentLogsTable.claim_id, input.claimId), eq(agentLogsTable.user_id, userId)));
 
   result.agentWorkflow = logs
     .sort((a, b) => (a.step_number || 0) - (b.step_number || 0))
@@ -279,9 +286,10 @@ function errorResult(claimId: string, status: "Rejected" | "Invalid input" | str
   };
 }
 
-async function persistResult(result: ClaimResult, processingTimeMs: number, keySlot: number) {
+async function persistResult(userId: string, result: ClaimResult, processingTimeMs: number, keySlot: number) {
   try {
     await db.insert(claim_results).values({
+      user_id: userId,
       claim_id: result.claimId,
       status: result.status,
       estimated_payout: result.estimatedPayout,

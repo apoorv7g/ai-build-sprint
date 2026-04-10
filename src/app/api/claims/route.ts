@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { claims, claim_results } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { getCurrentUserFromCookies } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1", 10);
@@ -30,22 +36,23 @@ export async function GET(request: NextRequest) {
         processing_time_ms: claim_results.processing_time_ms,
       })
       .from(claims)
-      .leftJoin(claim_results, eq(claims.claim_id, claim_results.claim_id));
+      .leftJoin(claim_results, and(eq(claims.claim_id, claim_results.claim_id), eq(claims.user_id, claim_results.user_id)));
 
     let results;
     if (status) {
       results = await query
-        .where(eq(claim_results.status, status))
+        .where(and(eq(claims.user_id, user.id), eq(claim_results.status, status)))
         .limit(perPage)
         .offset(offset);
     } else {
-      results = await query.limit(perPage).offset(offset);
+      results = await query.where(eq(claims.user_id, user.id)).limit(perPage).offset(offset);
     }
 
     // Get total count
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
-      .from(claims);
+      .from(claims)
+      .where(eq(claims.user_id, user.id));
 
     return NextResponse.json({
       data: results,

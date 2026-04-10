@@ -7,22 +7,44 @@ import {
   boolean,
   jsonb,
   numeric,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const claims = pgTable("claims", {
+export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  claim_id: text("claim_id").unique().notNull(),
-  description: text("description").notNull(),
-  policy_type: text("policy_type").notNull(),
-  claim_amount: integer("claim_amount").notNull(),
-  past_claims: integer("past_claims").default(0).notNull(),
-  documents_status: text("documents_status").notNull(),
-  image_url: text("image_url"),
-  submitted_at: timestamp("submitted_at").defaultNow(),
+  username: text("username").notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token_hash: text("token_hash").notNull().unique(),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const claims = pgTable(
+  "claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    claim_id: text("claim_id").notNull(),
+    description: text("description").notNull(),
+    policy_type: text("policy_type").notNull(),
+    claim_amount: integer("claim_amount").notNull(),
+    past_claims: integer("past_claims").default(0).notNull(),
+    documents_status: text("documents_status").notNull(),
+    image_url: text("image_url"),
+    submitted_at: timestamp("submitted_at").defaultNow(),
+  },
+  (table) => [uniqueIndex("claims_user_claim_id_idx").on(table.user_id, table.claim_id)]
+);
 
 export const claim_results = pgTable("claim_results", {
   id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   claim_id: text("claim_id").notNull(),
   status: text("status").notNull(),
   estimated_payout: integer("estimated_payout").notNull(),
@@ -40,6 +62,7 @@ export const claim_results = pgTable("claim_results", {
 
 export const agent_logs = pgTable("agent_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   claim_id: text("claim_id").notNull(),
   step_number: integer("step_number").notNull(),
   agent_name: text("agent_name").notNull(),
@@ -55,17 +78,16 @@ export const agent_logs = pgTable("agent_logs", {
 
 export const chat_threads = pgTable("chat_threads", {
   id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   thread_id: text("thread_id").unique().notNull(),
-  claim_id: text("claim_id").notNull().references(() => claims.claim_id),
+  claim_id: text("claim_id"),
   title: text("title").notNull(),
   created_at: timestamp("created_at").defaultNow(),
 });
 
 export const chat_messages = pgTable("chat_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
-  thread_id: text("thread_id")
-    .notNull()
-    .references(() => chat_threads.thread_id, { onDelete: "cascade" }),
+  thread_id: text("thread_id").notNull().references(() => chat_threads.thread_id, { onDelete: "cascade" }),
   sender: text("sender").notNull(),
   message: text("message").notNull(),
   metadata: jsonb("metadata"),

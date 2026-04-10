@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { CoverageAndFraudOutput } from "@/types";
 
 interface CoverageAndFraudInput {
+  userId: string;
   claimId: string;
   policyType: string;
   incidentType: string;
@@ -22,7 +23,7 @@ export async function coverageAndFraudAgent(
   input: CoverageAndFraudInput
 ): Promise<CoverageAndFraudOutput> {
   const start = Date.now();
-  const { claimId, policyType, incidentType, documentsStatus, claimAmount, pastClaims, description, initialDamageSeverity, groqClient, keySlot } = input;
+  const { userId, claimId, policyType, incidentType, documentsStatus, claimAmount, pastClaims, description, initialDamageSeverity, groqClient, keySlot } = input;
 
   const systemPrompt = `You are a dual-purpose insurance analyst handling both coverage validation and fraud detection.
 
@@ -74,6 +75,7 @@ Description: ${description}`;
     const tokensUsed = response.usage?.total_tokens || 0;
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 3,
       agent_name: "CoverageAndFraudAgent",
@@ -90,6 +92,7 @@ Description: ${description}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 3,
       agent_name: "CoverageAndFraudAgent",

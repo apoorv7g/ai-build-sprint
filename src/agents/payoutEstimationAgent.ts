@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { PayoutEstimationOutput } from "@/types";
 
 interface PayoutEstimationInput {
+  userId: string;
   claimId: string;
   claimAmount: number;
   finalDamageType: string;
@@ -20,7 +21,7 @@ export async function payoutEstimationAgent(
   input: PayoutEstimationInput
 ): Promise<PayoutEstimationOutput> {
   const start = Date.now();
-  const { claimId, claimAmount, finalDamageType, fraudRisk, coverageValid, documentsStatus, groqClient, keySlot } = input;
+  const { userId, claimId, claimAmount, finalDamageType, fraudRisk, coverageValid, documentsStatus, groqClient, keySlot } = input;
 
   const systemPrompt = `You are an insurance payout calculation specialist. Calculate the payout using these exact rules.
 
@@ -72,6 +73,7 @@ Documents Status: ${documentsStatus}`;
     result.estimatedPayout = Math.max(0, result.grossPayout - 3000);
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 5,
       agent_name: "PayoutEstimationAgent",
@@ -88,6 +90,7 @@ Documents Status: ${documentsStatus}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 5,
       agent_name: "PayoutEstimationAgent",

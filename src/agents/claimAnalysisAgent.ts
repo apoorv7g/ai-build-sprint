@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { ClaimAnalysisOutput } from "@/types";
 
 interface ClaimAnalysisInput {
+  userId: string;
   claimId: string;
   description: string;
   policyType: string;
@@ -20,7 +21,7 @@ export async function claimAnalysisAgent(
   input: ClaimAnalysisInput
 ): Promise<ClaimAnalysisOutput> {
   const start = Date.now();
-  const { claimId, description, policyType, claimAmount, pastClaims, documentsStatus, groqClient, keySlot } = input;
+  const { userId, claimId, description, policyType, claimAmount, pastClaims, documentsStatus, groqClient, keySlot } = input;
 
   const systemPrompt = `You are an expert insurance claim analyst. Analyze the insurance claim and identify:
 - incidentType: the type of incident (e.g., collision, theft, fire, flood, vandalism)
@@ -58,6 +59,7 @@ Description: ${description}`;
     const tokensUsed = response.usage?.total_tokens || 0;
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 2,
       agent_name: "ClaimAnalysisAgent",
@@ -74,6 +76,7 @@ Description: ${description}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 2,
       agent_name: "ClaimAnalysisAgent",

@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { CustomerCommunicationOutput } from "@/types";
 
 interface CustomerCommunicationInput {
+  userId: string;
   claimId: string;
   status: string;
   estimatedPayout: number;
@@ -22,7 +23,7 @@ export async function customerCommunicationAgent(
   input: CustomerCommunicationInput
 ): Promise<CustomerCommunicationOutput> {
   const start = Date.now();
-  const { claimId, status, estimatedPayout, reason, fraudFlags, coverageReason, damageType, documentIssue, groqClient, keySlot } = input;
+  const { userId, claimId, status, estimatedPayout, reason, fraudFlags, coverageReason, damageType, documentIssue, groqClient, keySlot } = input;
 
   const systemPrompt = `You are a professional, empathetic insurance customer communications specialist. Write a warm, professional customer letter.
 
@@ -64,6 +65,7 @@ Summary Reason: ${reason}`;
     const tokensUsed = response.usage?.total_tokens || 0;
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 6,
       agent_name: "CustomerCommunicationAgent",
@@ -80,6 +82,7 @@ Summary Reason: ${reason}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 6,
       agent_name: "CustomerCommunicationAgent",

@@ -5,8 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClaimSubmissionForm } from "@/components/ClaimSubmissionForm";
 import { TripleClaimPanel } from "@/components/TripleClaimPanel";
 import { ClaimsDashboard } from "@/components/ClaimsDashboard";
+import { ChatWorkspace } from "@/components/ChatWorkspace";
 
-type ViewTab = "single" | "multi" | "dashboard";
+type ViewTab = "single" | "multi" | "dashboard" | "chat";
 
 const viewMeta: Record<ViewTab, { title: string; description: string; tabLabel: string }> = {
   single: {
@@ -24,10 +25,15 @@ const viewMeta: Record<ViewTab, { title: string; description: string; tabLabel: 
     description: "Review processed claims, outcomes, payout, and confidence.",
     tabLabel: "Dashboard",
   },
+  chat: {
+    title: "Chat Interface",
+    description: "Talk to Cache Memory Assistant about claims, payouts, and next steps.",
+    tabLabel: "Chat",
+  },
 };
 
 function parseView(value: string | null): ViewTab {
-  if (value === "single" || value === "multi" || value === "dashboard") return value;
+  if (value === "single" || value === "multi" || value === "dashboard" || value === "chat") return value;
   return "single";
 }
 
@@ -43,7 +49,7 @@ export function ClaimWorkspaceTabs() {
   const meta = useMemo(() => viewMeta[activeTab], [activeTab]);
 
   useEffect(() => {
-    document.title = `ClaimIQ - ${meta.title}`;
+    document.title = `Cache Memory - ${meta.title}`;
   }, [meta.title]);
 
   useEffect(() => {
@@ -80,6 +86,9 @@ export function ClaimWorkspaceTabs() {
         <TabsTrigger value="dashboard" className="flex-1 uppercase tracking-[0.08em] text-xs md:text-sm">
           {viewMeta.dashboard.tabLabel}
         </TabsTrigger>
+        <TabsTrigger value="chat" className="flex-1 uppercase tracking-[0.08em] text-xs md:text-sm">
+          {viewMeta.chat.tabLabel}
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="single">
@@ -97,6 +106,12 @@ export function ClaimWorkspaceTabs() {
       <TabsContent value="dashboard">
         <section className="rounded-xl border border-border/60 bg-card/90 p-6 shadow-lg shadow-slate-900/5 lift-hover">
           <ClaimsDashboard />
+        </section>
+      </TabsContent>
+
+      <TabsContent value="chat">
+        <section className="rounded-xl border border-border/60 bg-card/90 p-6 shadow-lg shadow-slate-900/5 lift-hover">
+          <ChatWorkspace />
         </section>
       </TabsContent>
     </Tabs>

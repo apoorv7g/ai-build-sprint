@@ -353,7 +353,7 @@ export function TripleClaimPanel() {
 
       {(loading || stepsPerClaim.some((s) => s.length > 0)) && (
         <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ClaimIQ Assistant</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Cache Memory Assistant</p>
           <h3 className="font-semibold text-sm text-foreground mt-2 mb-3">Agent Pipelines Running Simultaneously</h3>
           <Separator className="mb-3" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

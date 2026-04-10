@@ -7,6 +7,7 @@ import { agent_logs } from "@/db/schema";
 import { DamageAssessmentOutput } from "@/types";
 
 interface DamageAssessmentInput {
+  userId: string;
   claimId: string;
   description: string;
   initialDamageSeverity: string;
@@ -20,7 +21,7 @@ export async function damageAssessmentAgent(
   input: DamageAssessmentInput
 ): Promise<DamageAssessmentOutput & { modelUsed: string }> {
   const start = Date.now();
-  const { claimId, description, initialDamageSeverity, imageBase64, imageMediaType, groqClient, keySlot } = input;
+  const { userId, claimId, description, initialDamageSeverity, imageBase64, imageMediaType, groqClient, keySlot } = input;
   const hasImage = !!(imageBase64 && imageMediaType);
   const modelUsed = hasImage ? MODELS.vision : MODELS.text;
 
@@ -90,6 +91,7 @@ ${hasImage ? "An image has been provided. Please analyze it carefully." : "No im
     const tokensUsed = response.usage?.total_tokens || 0;
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 4,
       agent_name: "DamageAssessmentAgent",
@@ -106,6 +108,7 @@ ${hasImage ? "An image has been provided. Please analyze it carefully." : "No im
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 4,
       agent_name: "DamageAssessmentAgent",
