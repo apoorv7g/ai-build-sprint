@@ -65,6 +65,8 @@ function CompactClaimForm({
   onChange: (v: ClaimFormState) => void;
   label: string;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -76,6 +78,22 @@ function CompactClaimForm({
       onChange({ ...value, imageBase64: base64, imageMediaType: mediaType });
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDragDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const [header, base64] = dataUrl.split(",");
+        const mediaType = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+        onChange({ ...value, imageBase64: base64, imageMediaType: mediaType });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -164,15 +182,35 @@ function CompactClaimForm({
 
       <div>
         <label className="block mb-0.5 font-medium text-xs">Image (optional)</label>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDragDrop}
+          className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition ${
+            value.imageBase64
+              ? "border-green-500 bg-green-500/10"
+              : "border-border/60 bg-background/40 hover:border-primary/40"
+          }`}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {value.imageBase64 ? (
+            <div className="text-xs">
+              <p className="text-green-600 font-medium">✓ Image loaded</p>
+              <p className="text-muted-foreground text-xs">Click to change</p>
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              <p className="font-medium">Drag & drop image here</p>
+              <p>or click to browse</p>
+            </div>
+          )}
+        </div>
         <input
+          ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png"
           onChange={handleImageUpload}
-          className="text-xs w-full"
+          className="hidden"
         />
-        {value.imageBase64 && (
-          <p className="text-xs text-green-600">✓ Image loaded</p>
-        )}
       </div>
     </div>
   );

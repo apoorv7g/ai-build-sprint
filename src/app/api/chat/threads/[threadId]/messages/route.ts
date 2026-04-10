@@ -108,13 +108,41 @@ export async function POST(
         if (claimRecord[0]) {
           const claim = claimRecord[0];
           const result = claimResultRecord[0];
-          claimContext = `\n\n---CLAIM CONTEXT---\nClaim ID: ${claim.claim_id}\nPolicy Type: ${claim.policy_type}\nClaim Amount: $${claim.claim_amount}\nPast Claims: ${claim.past_claims}\nDocuments Status: ${claim.documents_status}\nDescription: ${claim.description}`;
+          
+          // Calculate inferences from database data
+          let riskAssessment = "";
+          if (claim.past_claims > 3) {
+            riskAssessment = "High claim history - flags for potential pattern";
+          } else if (claim.past_claims > 0) {
+            riskAssessment = "Moderate claim history";
+          } else {
+            riskAssessment = "First-time claimant - lower risk profile";
+          }
+          
+          let documentAssessment = "";
+          if (claim.documents_status === "Missing") {
+            documentAssessment = " - May require follow-up documentation";
+          } else {
+            documentAssessment = " - Documentation verified";
+          }
+          
+          let payoutAnalysis = "";
+          if (result) {
+            const reductionAmount = claim.claim_amount - result.estimated_payout;
+            payoutAnalysis = `\n  Payout Analysis: ₹${claim.claim_amount} claimed → ₹${result.estimated_payout} approved (${result.payout_percentage}% coverage)`;
+            if (reductionAmount > 0) {
+              payoutAnalysis += `\n  Reduction of ₹${reductionAmount} due to: damage severity (${result.damage_type}), policy limits, deductibles`;
+            }
+          }
+          
+          claimContext = `\n\n---CLAIM CONTEXT---\nClaim ID: ${claim.claim_id}\nPolicy Type: ${claim.policy_type}\nClaim Amount: ₹${claim.claim_amount}\nPast Claims: ${claim.past_claims} (${riskAssessment})\nDocuments Status: ${claim.documents_status}${documentAssessment}\nDescription: ${claim.description}`;
 
           if (result) {
-            claimContext += `\n\nAnalysis Results:\n- Status: ${result.status}\n- Estimated Payout: $${result.estimated_payout}\n- Confidence Score: ${result.confidence_score}%\n- Damage Type: ${result.damage_type}\n- Coverage Valid: ${result.coverage_valid ? "Yes" : "No"}\n- Reason: ${result.reason}`;
+            claimContext += `\n\nAnalysis Results:\n  Status: ${result.status}\n  Estimated Payout: ₹${result.estimated_payout}\n  Confidence Score: ${result.confidence_score}%\n  Damage Type: ${result.damage_type}\n  Coverage Valid: ${result.coverage_valid ? "Yes" : "No"}\n  Reason: ${result.reason}`;
             if (result.fraud_flags && Object.keys(result.fraud_flags).length > 0) {
-              claimContext += `\n- Fraud Flags: ${JSON.stringify(result.fraud_flags)}`;
+              claimContext += `\n  Fraud Flags: ${JSON.stringify(result.fraud_flags)}`;
             }
+            claimContext += payoutAnalysis;
           }
         }
       } catch {
@@ -131,16 +159,20 @@ export async function POST(
             role: "system",
             content:
               "You are Cache Memory Assistant, an expert insurance specialist. Help users understand claim processing, payout decisions, and next steps.\n\n" +
-              "CRITICAL: You MUST format ALL responses using proper Markdown:\n" +
-              "- Use **bold** for important terms\n" +
-              "- Use *italic* for emphasis\n" +
-              "- Use # Heading 2, ## Heading 3 for sections\n" +
-              "- Use bullet points with - for lists\n" +
-              "- Use numbered lists 1. 2. 3. for steps\n" +
-              "- Use `code` for technical terms or claim IDs\n" +
-              "- Use > for blockquotes when highlighting key information\n" +
-              "- Use --- for section breaks\n\n" +
-              "Be concise, professional, and always cite claim-specific data when available." +
+              "RESPONSE FORMAT (Plain Text Only):\n" +
+              "- Be clear and direct without markdown headers (### etc.)\n" +
+              "- Use **bold** only for key terms and important numbers\n" +
+              "- Use bullet points with - for lists when needed\n" +
+              "- Include specific claim data (amounts in ₹, percentages, dates)\n" +
+              "- Write in conversational, professional tone\n" +
+              "- Always cite claim-specific data from context\n" +
+              "- Maximize inferences: explain policy impact, damage implications, next steps based on available data\n" +
+              "- NO markdown tables or ### section headers\n" +
+              "- NO dollar signs ($), use ₹ only for currency\n\n" +
+              "- REMEMBER deductible IS ALWAYS 3000\n\n" +
+              " ₹3000 is the deductible amount for all claims. not 500 Always factor this into payout explanations and next steps guidance.\n\n" +
+              "- ALSO NO MATH SYMBOLS , OR ANY MATH MARKDOWN OR HIGHTHNG , DO IT WITHOUT IT and no ### AT ALL.\n "+
+              "Your expertise: Connect claim data to policy rules, explain decision rationale, provide actionable guidance." +
               claimContext,
           },
           ...contextMessages,
@@ -164,6 +196,9 @@ export async function POST(
     return NextResponse.json({ messages });
   } catch (err) {
     console.error("POST /api/chat/threads/[threadId]/messages error:", err);
-    return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    const errorMsg = err instanceof Error ? err.message : "Failed to send message";
+    // Use claim-specific error message if applicable
+    const userMessage = errorMsg.includes("claim") ? "claim id has to be unique" : "Failed to send message";
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }

@@ -10,9 +10,6 @@ import { damageAssessmentAgent } from "@/agents/damageAssessmentAgent";
 import { payoutEstimationAgent } from "@/agents/payoutEstimationAgent";
 import { customerCommunicationAgent } from "@/agents/customerCommunicationAgent";
 import { ClaimInput, ClaimResult } from "@/types";
-import { MODELS } from "@/lib/groq";
-import { groqCall } from "@/lib/groqCall";
-import type { Groq } from "groq-sdk";
 
 export async function runClaim(
   userId: string,
@@ -56,10 +53,7 @@ export async function runClaim(
     
     // Handle database errors with user-friendly message
     if (error?.code === "23505" || error?.message?.includes("unique")) {
-      const userMessage = await generateErrorMessage(
-        "A claim with this ID already exists in our system. Please use a different claim ID or contact support if you believe this is an error.",
-        groqClient
-      );
+      const userMessage = "A claim with this ID already exists in our system. Please use a different claim ID and try again.";
       const dbError = new Error(userMessage) as Error & { status?: number; originalError?: string };
       dbError.status = 409;
       dbError.originalError = "Duplicate claim ID";
@@ -67,10 +61,7 @@ export async function runClaim(
     }
     
     // Generic database error handler
-    const userMessage = await generateErrorMessage(
-      `Database error occurred while processing your claim: ${error?.message || "Unknown error"}. Please try again later`,
-      groqClient
-    );
+    const userMessage = "We encountered a database issue while saving your claim. Please try again in a few moments.";
     const dbError = new Error(userMessage) as Error & { status?: number; originalError?: string };
     dbError.status = 500;
     dbError.originalError = error?.message;
@@ -107,7 +98,10 @@ export async function runClaim(
       groqClient,
       keySlot: claimSlot,
     });
-  } catch {
+  } catch (err) {
+    // Log the specific error for debugging
+    console.error("Step 2 - Claim Analysis failed:", err instanceof Error ? err.message : String(err));
+    
     // On failure, set status to Pending and abort
     const processingTimeMs = Date.now() - pipelineStart;
     const fallback: ClaimResult = {
@@ -120,7 +114,7 @@ export async function runClaim(
       fraudRisk: "Unknown",
       fraudFlags: [],
       coverageValid: false,
-      reason: "Claim analysis failed. Manual review required.",
+      reason: "We're analyzing your claim. Please check back in a few moments.",
       customerMessage: "",
       customerMessageSubject: "",
       groqKeySlotUsed: claimSlot,
@@ -188,23 +182,32 @@ export async function runClaim(
       keySlot: claimSlot,
     });
 
-    // Add mismatch flag if detected
+    // Reject immediately if image-description mismatch detected
     if (damageResult.imageMatchesDescription === false) {
       fraudFlags.push("Image-description mismatch detected");
+      payoutResult = {
+        status: "Rejected" as const,
+        payoutPercentage: 0,
+        grossPayout: 0,
+        deductibleApplied: 3000,
+        estimatedPayout: 0,
+        justification: "Claim rejected due to image-description mismatch. Potential fraud risk.",
+        reasoning: "Image does not match damage description provided.",
+      };
+    } else {
+      // STEP 5 — Payout Estimation (only if no mismatch)
+      payoutResult = await payoutEstimationAgent({
+        userId,
+        claimId: input.claimId,
+        claimAmount: input.claimAmount,
+        finalDamageType: damageResult.finalDamageType,
+        fraudRisk: coverageResult.fraudRisk,
+        coverageValid: coverageResult.coverageValid,
+        documentsStatus: input.documentsStatus,
+        groqClient,
+        keySlot: claimSlot,
+      });
     }
-
-    // STEP 5 — Payout Estimation
-    payoutResult = await payoutEstimationAgent({
-      userId,
-      claimId: input.claimId,
-      claimAmount: input.claimAmount,
-      finalDamageType: damageResult.finalDamageType,
-      fraudRisk: coverageResult.fraudRisk,
-      coverageValid: coverageResult.coverageValid,
-      documentsStatus: input.documentsStatus,
-      groqClient,
-      keySlot: claimSlot,
-    });
   }
 
   // STEP 6 — Customer Communication (always runs)
@@ -345,33 +348,4 @@ function buildReason(
   parts.push(`Final damage: ${damage.finalDamageType}.`);
   parts.push(`Decision: ${payout.justification}`);
   return parts.join(" ");
-}
-
-async function generateErrorMessage(dbError: string, groqClient: Groq): Promise<string> {
-  try {
-    const response = await groqCall(async () =>
-      groqClient.chat.completions.create({
-        model: MODELS.text,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a professional insurance customer support assistant. Convert technical database/system errors into clear, empathetic user-friendly messages. Be brief (one sentence max) and suggest next steps.",
-          },
-          {
-            role: "user",
-            content: `Convert this technical error into a user-friendly message: "${dbError}"`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 100,
-      })
-    );
-
-    const message = response.choices[0]?.message?.content?.trim();
-    return message || dbError;
-  } catch {
-    // Fallback if LLM call fails
-    return dbError;
-  }
 }
