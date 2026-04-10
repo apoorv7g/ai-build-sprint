@@ -1,0 +1,169 @@
+import { NextRequest, NextResponse } from "next/server";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { chat_messages, chat_threads, claims, claim_results } from "@/db/schema";
+import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getGroqClient, MODELS } from "@/lib/groq";
+import { groqCall } from "@/lib/groqCall";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ threadId: string }> }
+) {
+  try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { threadId } = await params;
+
+    const thread = await db
+      .select()
+      .from(chat_threads)
+      .where(and(eq(chat_threads.thread_id, threadId), eq(chat_threads.user_id, user.id)))
+      .limit(1);
+
+    if (!thread.length) {
+      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+    }
+
+    const messages = await db
+      .select()
+      .from(chat_messages)
+      .where(eq(chat_messages.thread_id, threadId))
+      .orderBy(asc(chat_messages.created_at));
+
+    return NextResponse.json({ thread: thread[0], messages });
+  } catch (err) {
+    console.error("GET /api/chat/threads/[threadId]/messages error:", err);
+    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ threadId: string }> }
+) {
+  try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { threadId } = await params;
+    const body = await request.json();
+    const message = String(body?.message ?? "").trim();
+
+    if (!message) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    const thread = await db
+      .select()
+      .from(chat_threads)
+      .where(and(eq(chat_threads.thread_id, threadId), eq(chat_threads.user_id, user.id)))
+      .limit(1);
+
+    if (!thread.length) {
+      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+    }
+
+    await db.insert(chat_messages).values({
+      thread_id: threadId,
+      sender: "user",
+      message,
+      metadata: { username: user.username },
+    });
+
+    const recent = await db
+      .select({ sender: chat_messages.sender, message: chat_messages.message })
+      .from(chat_messages)
+      .where(eq(chat_messages.thread_id, threadId))
+      .orderBy(desc(chat_messages.created_at))
+      .limit(12);
+
+    const contextMessages = recent.reverse().map((msg) => ({
+      role: msg.sender === "assistant" ? "assistant" : "user",
+      content: msg.message,
+    })) as Array<{ role: "assistant" | "user"; content: string }>;
+
+    // Fetch claim context if thread is linked to a claim
+    let claimContext = "";
+    if (thread[0].claim_id) {
+      try {
+        const claimRecord = await db
+          .select()
+          .from(claims)
+          .where(and(eq(claims.claim_id, thread[0].claim_id), eq(claims.user_id, user.id)))
+          .limit(1);
+
+        const claimResultRecord = await db
+          .select()
+          .from(claim_results)
+          .where(and(eq(claim_results.claim_id, thread[0].claim_id), eq(claim_results.user_id, user.id)))
+          .orderBy(desc(claim_results.created_at))
+          .limit(1);
+
+        if (claimRecord[0]) {
+          const claim = claimRecord[0];
+          const result = claimResultRecord[0];
+          claimContext = `\n\n---CLAIM CONTEXT---\nClaim ID: ${claim.claim_id}\nPolicy Type: ${claim.policy_type}\nClaim Amount: $${claim.claim_amount}\nPast Claims: ${claim.past_claims}\nDocuments Status: ${claim.documents_status}\nDescription: ${claim.description}`;
+
+          if (result) {
+            claimContext += `\n\nAnalysis Results:\n- Status: ${result.status}\n- Estimated Payout: $${result.estimated_payout}\n- Confidence Score: ${result.confidence_score}%\n- Damage Type: ${result.damage_type}\n- Coverage Valid: ${result.coverage_valid ? "Yes" : "No"}\n- Reason: ${result.reason}`;
+            if (result.fraud_flags && Object.keys(result.fraud_flags).length > 0) {
+              claimContext += `\n- Fraud Flags: ${JSON.stringify(result.fraud_flags)}`;
+            }
+          }
+        }
+      } catch {
+        // Silently fail - continue without claim context
+      }
+    }
+
+    const aiText = await groqCall(async () => {
+      const response = await getGroqClient().chat.completions.create({
+        model: MODELS.text,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are Cache Memory Assistant, an expert insurance specialist. Help users understand claim processing, payout decisions, and next steps.\n\n" +
+              "CRITICAL: You MUST format ALL responses using proper Markdown:\n" +
+              "- Use **bold** for important terms\n" +
+              "- Use *italic* for emphasis\n" +
+              "- Use # Heading 2, ## Heading 3 for sections\n" +
+              "- Use bullet points with - for lists\n" +
+              "- Use numbered lists 1. 2. 3. for steps\n" +
+              "- Use `code` for technical terms or claim IDs\n" +
+              "- Use > for blockquotes when highlighting key information\n" +
+              "- Use --- for section breaks\n\n" +
+              "Be concise, professional, and always cite claim-specific data when available." +
+              claimContext,
+          },
+          ...contextMessages,
+        ],
+      });
+      return response.choices[0]?.message?.content?.trim() || "I could not generate a response. Please try again.";
+    });
+
+    await db.insert(chat_messages).values({
+      thread_id: threadId,
+      sender: "assistant",
+      message: aiText,
+    });
+
+    const messages = await db
+      .select()
+      .from(chat_messages)
+      .where(eq(chat_messages.thread_id, threadId))
+      .orderBy(asc(chat_messages.created_at));
+
+    return NextResponse.json({ messages });
+  } catch (err) {
+    console.error("POST /api/chat/threads/[threadId]/messages error:", err);
+    return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+  }
+}

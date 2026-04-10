@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { PayoutEstimationOutput } from "@/types";
 
 interface PayoutEstimationInput {
+  userId: string;
   claimId: string;
   claimAmount: number;
   finalDamageType: string;
@@ -20,32 +21,47 @@ export async function payoutEstimationAgent(
   input: PayoutEstimationInput
 ): Promise<PayoutEstimationOutput> {
   const start = Date.now();
-  const { claimId, claimAmount, finalDamageType, fraudRisk, coverageValid, documentsStatus, groqClient, keySlot } = input;
+  const { userId, claimId, claimAmount, finalDamageType, fraudRisk, coverageValid, documentsStatus, groqClient, keySlot } = input;
 
-  const systemPrompt = `You are an insurance payout calculation specialist. Calculate the payout using these exact rules.
+  const systemPrompt = `You are an insurance payout calculation expert. Apply STRICT rules with zero discretion.
 
-PAYOUT RANGES:
+PAYOUT CALCULATION RULES (apply in exact order):
+
+STEP 1: IMMEDIATE REJECTION (payoutPercentage = 0):
+- If coverageValid = false → Reject "Coverage doesn't apply"
+- If fraudRisk = "High" → Reject "Fraud detected"
+
+STEP 2: PENDING REVIEW (assign status = "Pending"):
+- If fraudRisk = "Medium" → Use LOWER end of range only
+- If documentsStatus = "Missing" → Flag "Requires documentation"
+- If claimAmount > 500000 → Flag "Manual review for large claim"
+
+STEP 3: CALCULATE PAYOUT RANGE:
 - Minor damage: 70-90% of claim amount
 - Moderate damage: 50-70% of claim amount
 - Major damage: 30-50% of claim amount
 
-OVERRIDE RULES (apply in this exact order):
-1. If coverageValid is false → status = "Rejected", payoutPercentage = 0
-2. If fraudRisk is "High" → status = "Rejected", payoutPercentage = 0
-3. If fraudRisk is "Medium" → use lower bound of range, status = "Pending"
-4. If documentsStatus is "Missing" → status = "Pending" regardless of other factors
-5. If claimAmount > 500000 → status = "Pending", add manual review flag
+STEP 4: SELECT PERCENTAGE (for Approved claims):
+- Use UPPER range if damage well-documented and no fraud indicators
+- Use MIDDLE range for standard claims
+- Use LOWER range if any documentation concerns
 
-DEDUCTIBLE: Always subtract ₹3000 from final payout. Final = (percentage/100 × claimAmount) - 3000, minimum 0.
+STEP 5: APPLY DEDUCTIBLE (always ₹3000):
+- Gross Payout = (percentage/100) × claimAmount
+- Deductible = 3000 (fixed)
+- Net Payout = max(0, Gross - 3000)
 
-Otherwise for valid claims: choose the optimal percentage within range based on damage evidence quality, status = "Approved".
+STATUS ASSIGNMENT:
+- "Rejected" if fraud high or coverage invalid or net payout would be zero
+- "Pending" if fraud medium, docs missing, or amount >500k
+- "Approved" if all checks passed and fraudRisk is "None" or "Low"
 
-Return ONLY valid JSON with keys: status (exactly "Approved", "Rejected", or "Pending"), payoutPercentage, grossPayout, deductibleApplied (always 3000), estimatedPayout, justification (one sentence), reasoning`;
+Return ONLY valid JSON with keys: status (Approved|Rejected|Pending), payoutPercentage (0-100), grossPayout, deductibleApplied (3000), estimatedPayout, flags (array of notes), justification, reasoning`;
 
   const userPrompt = `Claim ID: ${claimId}
 Claim Amount: ₹${claimAmount}
 Final Damage Type: ${finalDamageType}
-Fraud Risk: ${fraudRisk}
+Fraud Risk Level: ${fraudRisk}
 Coverage Valid: ${coverageValid}
 Documents Status: ${documentsStatus}`;
 
@@ -72,6 +88,7 @@ Documents Status: ${documentsStatus}`;
     result.estimatedPayout = Math.max(0, result.grossPayout - 3000);
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 5,
       agent_name: "PayoutEstimationAgent",
@@ -88,6 +105,7 @@ Documents Status: ${documentsStatus}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 5,
       agent_name: "PayoutEstimationAgent",

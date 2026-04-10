@@ -24,10 +24,15 @@ export function GroqKeyStatusBar({ keyStatuses }: GroqKeyStatusBarProps) {
   return (
     <div className="border border-white/20 bg-white/10 px-2.5 py-1.5 backdrop-blur-sm">
       <div className="flex items-center gap-2 text-[11px] sm:text-xs flex-wrap">
+        <div className="inline-flex items-center gap-1.5 px-2 py-1 border bg-blue-200/25 border-blue-200/40 text-blue-50 rounded-sm">
+          <span className="inline-block w-1.5 h-1.5 bg-blue-300" />
+          <span className="font-medium">Model:</span>
+          <span className="text-blue-100 font-mono">gpt-oss-120b</span>
+        </div>
       {statuses.map((key) => (
         <div
           key={key.slot}
-          className={`inline-flex items-center gap-1.5 px-2 py-1 border ${
+          className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded-sm ${
             key.active
               ? "bg-emerald-200/25 border-emerald-200/40 text-emerald-50"
               : "bg-slate-400/10 border-slate-300/20 text-slate-200"

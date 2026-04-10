@@ -3,15 +3,18 @@ import { calculateConfidence } from "@/lib/confidenceCalculator";
 import { imageUrlToBase64 } from "@/lib/imageUtils";
 import { db } from "@/db";
 import { claims, claim_results } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { claimAnalysisAgent } from "@/agents/claimAnalysisAgent";
 import { coverageAndFraudAgent } from "@/agents/coverageAndFraudAgent";
 import { damageAssessmentAgent } from "@/agents/damageAssessmentAgent";
 import { payoutEstimationAgent } from "@/agents/payoutEstimationAgent";
 import { customerCommunicationAgent } from "@/agents/customerCommunicationAgent";
 import { ClaimInput, ClaimResult } from "@/types";
+import { MODELS, getGroqClient } from "@/lib/groq";
+import { groqCall } from "@/lib/groqCall";
 
 export async function runClaim(
+  userId: string,
   input: ClaimInput,
   claimSlot: 0 | 1 | 2 = 0
 ): Promise<ClaimResult> {
@@ -38,6 +41,7 @@ export async function runClaim(
   // Insert claim into DB
   try {
     await db.insert(claims).values({
+      user_id: userId,
       claim_id: input.claimId,
       description: input.description,
       policy_type: input.policyType,
@@ -48,10 +52,30 @@ export async function runClaim(
     });
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
+    
+    // Handle database errors with user-friendly message
     if (error?.code === "23505" || error?.message?.includes("unique")) {
-      throw Object.assign(new Error("Duplicate claim ID"), { status: 409 });
+      const userMessage = await generateErrorMessage(
+        "A claim with this ID already exists in our system. Please use a different claim ID or contact support if you believe this is an error.",
+        groqClient,
+        claimSlot
+      );
+      const dbError: any = new Error(userMessage);
+      dbError.status = 409;
+      dbError.originalError = "Duplicate claim ID";
+      throw dbError;
     }
-    throw err;
+    
+    // Generic database error handler
+    const userMessage = await generateErrorMessage(
+      `Database error occurred while processing your claim: ${error?.message || "Unknown error"}. Please try again later`,
+      groqClient,
+      claimSlot
+    );
+    const dbError: any = new Error(userMessage);
+    dbError.status = 500;
+    dbError.originalError = error?.message;
+    throw dbError;
   }
 
   // Image handling
@@ -74,6 +98,7 @@ export async function runClaim(
   let analysisResult;
   try {
     analysisResult = await claimAnalysisAgent({
+      userId,
       claimId: input.claimId,
       description: input.description,
       policyType: input.policyType,
@@ -103,12 +128,13 @@ export async function runClaim(
       agentWorkflow: [],
       processingTimeMs,
     };
-    await persistResult(fallback, processingTimeMs, claimSlot);
+    await persistResult(userId, fallback, processingTimeMs, claimSlot);
     return fallback;
   }
 
   // STEP 3 — Coverage + Fraud Check
   const coverageResult = await coverageAndFraudAgent({
+    userId,
     claimId: input.claimId,
     policyType: input.policyType,
     incidentType: analysisResult.incidentType,
@@ -153,6 +179,7 @@ export async function runClaim(
   if (!shouldShortCircuit) {
     // STEP 4 — Damage Assessment
     damageResult = await damageAssessmentAgent({
+      userId,
       claimId: input.claimId,
       description: input.description,
       initialDamageSeverity: analysisResult.initialDamageSeverity,
@@ -169,6 +196,7 @@ export async function runClaim(
 
     // STEP 5 — Payout Estimation
     payoutResult = await payoutEstimationAgent({
+      userId,
       claimId: input.claimId,
       claimAmount: input.claimAmount,
       finalDamageType: damageResult.finalDamageType,
@@ -183,6 +211,7 @@ export async function runClaim(
   // STEP 6 — Customer Communication (always runs)
   const reason = buildReason(analysisResult, coverageResult, damageResult, payoutResult);
   const commResult = await customerCommunicationAgent({
+    userId,
     claimId: input.claimId,
     status: payoutResult.status,
     estimatedPayout: payoutResult.estimatedPayout,
@@ -232,14 +261,14 @@ export async function runClaim(
   };
 
   // STEP 8 — Persist & Return
-  await persistResult(result, processingTimeMs, claimSlot);
+  await persistResult(userId, result, processingTimeMs, claimSlot);
 
   // Fetch agent logs for the workflow
   const { agent_logs: agentLogsTable } = await import("@/db/schema");
   const logs = await db
     .select()
     .from(agentLogsTable)
-    .where(eq(agentLogsTable.claim_id, input.claimId));
+    .where(and(eq(agentLogsTable.claim_id, input.claimId), eq(agentLogsTable.user_id, userId)));
 
   result.agentWorkflow = logs
     .sort((a, b) => (a.step_number || 0) - (b.step_number || 0))
@@ -279,9 +308,10 @@ function errorResult(claimId: string, status: "Rejected" | "Invalid input" | str
   };
 }
 
-async function persistResult(result: ClaimResult, processingTimeMs: number, keySlot: number) {
+async function persistResult(userId: string, result: ClaimResult, processingTimeMs: number, keySlot: number) {
   try {
     await db.insert(claim_results).values({
+      user_id: userId,
       claim_id: result.claimId,
       status: result.status,
       estimated_payout: result.estimatedPayout,
@@ -316,4 +346,33 @@ function buildReason(
   parts.push(`Final damage: ${damage.finalDamageType}.`);
   parts.push(`Decision: ${payout.justification}`);
   return parts.join(" ");
+}
+
+async function generateErrorMessage(dbError: string, groqClient: any, keySlot: number): Promise<string> {
+  try {
+    const response = await groqCall(async () =>
+      groqClient.chat.completions.create({
+        model: MODELS.text,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a professional insurance customer support assistant. Convert technical database/system errors into clear, empathetic user-friendly messages. Be brief (one sentence max) and suggest next steps.",
+          },
+          {
+            role: "user",
+            content: `Convert this technical error into a user-friendly message: "${dbError}"`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 100,
+      })
+    );
+
+    const message = response.choices[0]?.message?.content?.trim();
+    return message || dbError;
+  } catch {
+    // Fallback if LLM call fails
+    return dbError;
+  }
 }

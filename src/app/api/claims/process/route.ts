@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runClaim } from "@/orchestrator/runClaim";
 import { ClaimInput } from "@/types";
+import { getCurrentUserFromCookies } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Validate required fields
@@ -44,17 +50,30 @@ export async function POST(request: NextRequest) {
     };
 
     try {
-      const result = await runClaim(input, 0);
+      const result = await runClaim(user.id, input, 0);
       return NextResponse.json(result);
     } catch (err: unknown) {
       const error = err as { status?: number; message?: string };
+      
+      // Handle duplicate claim
       if (error?.status === 409) {
-        return NextResponse.json({ error: "Duplicate claim ID" }, { status: 409 });
+        return NextResponse.json({ error: error.message || "Duplicate claim ID" }, { status: 409 });
       }
+      
+      // Handle database errors (already have user-friendly message)
+      if (error?.status === 500) {
+        return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+      }
+      
+      // Re-throw for generic handler
       throw err;
     }
   } catch (err) {
     console.error("POST /api/claims/process error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const error = err as { message?: string };
+    return NextResponse.json(
+      { error: error?.message || "Internal server error" }, 
+      { status: 500 }
+    );
   }
 }

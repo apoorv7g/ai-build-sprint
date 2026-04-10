@@ -6,6 +6,7 @@ import { agent_logs } from "@/db/schema";
 import { CustomerCommunicationOutput } from "@/types";
 
 interface CustomerCommunicationInput {
+  userId: string;
   claimId: string;
   status: string;
   estimatedPayout: number;
@@ -22,28 +23,51 @@ export async function customerCommunicationAgent(
   input: CustomerCommunicationInput
 ): Promise<CustomerCommunicationOutput> {
   const start = Date.now();
-  const { claimId, status, estimatedPayout, reason, fraudFlags, coverageReason, damageType, documentIssue, groqClient, keySlot } = input;
+  const { userId, claimId, status, estimatedPayout, reason, fraudFlags, coverageReason, damageType, documentIssue, groqClient, keySlot } = input;
 
-  const systemPrompt = `You are a professional, empathetic insurance customer communications specialist. Write a warm, professional customer letter.
+  const systemPrompt = `You are an expert insurance customer communications specialist. Write clear, professional communications.
 
-LETTER REQUIREMENTS:
-- Start with a greeting mentioning the claim ID
-- Clearly state the decision (Approved/Rejected/Pending)
-- If APPROVED: Show the payout amount in ₹ and mention 5-7 business day timeline
-- If REJECTED: Give the reason clearly but WITHOUT accusatory language
-- If PENDING: List exactly what documents/information to submit with a 10-day deadline
-- End with professional closing and placeholder contact info [claims@insureco.in / 1800-XXX-XXXX]
+COMMUNICATION PROTOCOL FOR EACH STATUS:
 
-Return ONLY valid JSON with keys: subject (email subject line), customerMessage (full letter text)`;
+APPROVED:
+- Congratulate customer on approval
+- State exact payout amount in ₹
+- Mention 5-7 business day processing timeline
+- Explain what happens next (bank transfer details)
+- Professional, positive tone
+
+REJECTED:
+- Start with acknowledgment of their claim
+- State the decision clearly but compassionately
+- Provide ONE clear reason (coverage doesn't apply OR fraud detected)
+- If fraud: Do NOT accuse, say "inconsistencies detected that require investigation"
+- Offer appeal process with timeframe
+- Provide contact info for clarification
+
+PENDING:
+- Thank them for submission
+- List EXACTLY what's missing or needed
+- Provide deadline (10 days)
+- Show them what each document should contain
+- Explain what happens when submission is complete
+- Provide support contact information
+
+TONE RULES:
+- Always professional and empathetic
+- No jargon - explain in simple terms
+- Be transparent about amounts and timelines
+- Never sound accusatory or dismissive
+
+Return ONLY valid JSON with keys: subject (email subject line), customerMessage (full letter text - 150-250 words)`;
 
   const userPrompt = `Claim ID: ${claimId}
-Status: ${status}
-Estimated Payout: ₹${estimatedPayout}
+Decision Status: ${status}
+Estimated Payout Amount: ₹${estimatedPayout}
 Damage Type: ${damageType}
-Coverage Reason: ${coverageReason}
-Document Issue: ${documentIssue}
-Fraud Flags: ${fraudFlags.length > 0 ? fraudFlags.join(", ") : "None"}
-Summary Reason: ${reason}`;
+Coverage Analysis: ${coverageReason}
+Missing Documentation: ${documentIssue}
+Fraud Risk Flags: ${fraudFlags.length > 0 ? fraudFlags.join(", ") : "None"}
+Overall Reason: ${reason}`;
 
   try {
     const response = await groqCall(() =>
@@ -64,6 +88,7 @@ Summary Reason: ${reason}`;
     const tokensUsed = response.usage?.total_tokens || 0;
 
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 6,
       agent_name: "CustomerCommunicationAgent",
@@ -80,6 +105,7 @@ Summary Reason: ${reason}`;
   } catch (err) {
     const latencyMs = Date.now() - start;
     await db.insert(agent_logs).values({
+      user_id: userId,
       claim_id: claimId,
       step_number: 6,
       agent_name: "CustomerCommunicationAgent",

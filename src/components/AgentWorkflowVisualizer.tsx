@@ -65,7 +65,7 @@ function StepNode({
           {step && step.status === "completed" && (
             <div className="text-xs mt-1 space-y-0.5 text-muted-foreground">
               <div className="truncate">
-                Model: {step.modelUsed?.includes("llama-4") ? "llama-4-scout" : "llama-3.3-70b"}
+                Model: {step.modelUsed?.includes("llama-4") ? "llama-4-scout" : "gpt-oss-120b"}
               </div>
               <div className="flex gap-2">
                 <span>Key #{step.groqKeySlot + 1}</span>

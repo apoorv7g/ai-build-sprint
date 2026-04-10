@@ -15,7 +15,7 @@ const body = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "ClaimIQ — Multi-Agent Orchestrator",
+  title: "Cache Memory - Multi-Agent Orchestrator",
   description: "AI-powered insurance claim processing with multi-agent orchestration",
 };
 

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runBatch } from "@/orchestrator/runBatch";
 import { ClaimInput } from "@/types";
+import { getCurrentUserFromCookies } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const claimsInput: ClaimInput[] = body.claims;
 
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const result = await runBatch(claimsInput);
+    const result = await runBatch(user.id, claimsInput);
     return NextResponse.json(result);
   } catch (err) {
     console.error("POST /api/claims/batch error:", err);
