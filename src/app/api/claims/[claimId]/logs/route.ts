@@ -5,10 +5,10 @@ import { eq, asc } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { claimId: string } }
+  { params }: { params: Promise<{ claimId: string }> }
 ) {
   try {
-    const { claimId } = params;
+    const { claimId } = await params;
 
     const logs = await db
       .select()
