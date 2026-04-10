@@ -25,34 +25,51 @@ export async function coverageAndFraudAgent(
   const start = Date.now();
   const { userId, claimId, policyType, incidentType, documentsStatus, claimAmount, pastClaims, description, initialDamageSeverity, groqClient, keySlot } = input;
 
-  const systemPrompt = `You are a dual-purpose insurance analyst handling both coverage validation and fraud detection.
+  const systemPrompt = `You are a highly experienced insurance fraud investigator and coverage specialist. Scrutinize EVERY red flag.
 
-COVERAGE RULES:
-- Comprehensive policy covers own damage (collision, theft, fire, flood, vandalism)
-- Third-Party policy does NOT cover own damage under any circumstances
-- Return coverageValid: true only if the policy type covers the incident type
+COVERAGE VALIDATION (strict):
+- Comprehensive: covers collision, theft, fire, flood, vandalism, weather damage
+- Third-Party: covers ONLY third-party liability, NOT own damage
+- Return coverageValid=false if policy doesn't cover the incident type
 
-FRAUD DETECTION — score each indicator:
-- pastClaims > 3 = strong fraud indicator
-- pastClaims 1-3 = moderate fraud indicator
-- claimAmount > 50000 for Minor damage = suspicious
-- claimAmount > 100000 for Moderate damage = suspicious
-- documentsStatus "Missing" = significant flag
-- description under 20 words or vague = linguistic flag
-- incident inconsistent with damage component = red flag
+CRITICAL FRAUD DETECTION - Investigate each factor:
+1. CLAIM HISTORY ANALYSIS:
+   - 5+ past claims = extremely high risk (red flag)
+   - 3-4 past claims = high risk for new typology
+   - 1-2 past claims = monitor if unusual pattern
+   
+2. AMOUNT SUSPICION:
+   - Minor damage + amount >50k = major red flag
+   - Moderate damage + amount >100k = major red flag
+   - Major damage + amount <20k = might be underreported
 
-Assign fraudRisk: exactly one of "None", "Low", "Medium", "High"
-Set fraudScore as a number 0-10 (0=no fraud, 10=definite fraud)
-recommendation: "approve", "review", or "reject"
+3. DOCUMENTATION GAPS:
+   - Missing = immediate manual review flag
+   - Complete but vague = investigate further
 
-Return ONLY valid JSON with keys: coverageValid, coverageReason, documentIssue, fraudRisk, fraudFlags (array), fraudScore, recommendation, reasoning`;
+4. PATTERN MATCHING:
+   - Identical claim types in history = fraud indicator
+   - Different types = legitimate customer
+   - Timing between claims (if rapid) = red flag
+
+5. CONSISTENCY CHECK:
+   - Description matches severity? (yes = +score, no = -score)
+   - Incident type matches damage? (yes = +score, no = major red flag)
+
+FRAUD SCORING (0-10 scale):
+- 0-2 = None (approve)
+- 3-5 = Low (approve with notes)
+- 6-7 = Medium (pending - needs review)
+- 8-10 = High (reject or escalate)
+
+Return ONLY valid JSON with keys: coverageValid, coverageReason, documentIssue, fraudRisk, fraudFlags (array of specific flags), fraudScore (0-10), recommendation (approve|review|reject), reasoning`;
 
   const userPrompt = `Claim ID: ${claimId}
 Policy Type: ${policyType}
 Incident Type: ${incidentType}
 Initial Damage Severity: ${initialDamageSeverity}
 Claim Amount: ₹${claimAmount}
-Past Claims: ${pastClaims}
+Past Claims Count: ${pastClaims}
 Documents Status: ${documentsStatus}
 Description: ${description}`;
 

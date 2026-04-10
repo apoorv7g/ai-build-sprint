@@ -54,13 +54,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     } catch (err: unknown) {
       const error = err as { status?: number; message?: string };
+      
+      // Handle duplicate claim
       if (error?.status === 409) {
-        return NextResponse.json({ error: "Duplicate claim ID" }, { status: 409 });
+        return NextResponse.json({ error: error.message || "Duplicate claim ID" }, { status: 409 });
       }
+      
+      // Handle database errors (already have user-friendly message)
+      if (error?.status === 500) {
+        return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+      }
+      
+      // Re-throw for generic handler
       throw err;
     }
   } catch (err) {
     console.error("POST /api/claims/process error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const error = err as { message?: string };
+    return NextResponse.json(
+      { error: error?.message || "Internal server error" }, 
+      { status: 500 }
+    );
   }
 }

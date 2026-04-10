@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { MarkdownMessage } from "@/components/MarkdownMessage";
 
 interface ChatThread {
   thread_id: string;
@@ -190,15 +191,16 @@ export function ChatWorkspace() {
           ) : (
             <div className="space-y-3">
               {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                    msg.sender === "assistant"
-                      ? "bg-secondary/70 text-foreground"
-                      : "ml-auto bg-primary text-primary-foreground"
-                  }`}
-                >
-                  {msg.message}
+                <div key={msg.id} className={msg.sender === "assistant" ? "" : "flex justify-end"}>
+                  {msg.sender === "assistant" ? (
+                    <div className="max-w-[85%]">
+                      <MarkdownMessage content={msg.message} isUser={false} />
+                    </div>
+                  ) : (
+                    <div className="max-w-[85%]">
+                      <MarkdownMessage content={msg.message} isUser={true} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

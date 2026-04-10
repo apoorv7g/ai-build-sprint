@@ -10,6 +10,8 @@ import { damageAssessmentAgent } from "@/agents/damageAssessmentAgent";
 import { payoutEstimationAgent } from "@/agents/payoutEstimationAgent";
 import { customerCommunicationAgent } from "@/agents/customerCommunicationAgent";
 import { ClaimInput, ClaimResult } from "@/types";
+import { MODELS, getGroqClient } from "@/lib/groq";
+import { groqCall } from "@/lib/groqCall";
 
 export async function runClaim(
   userId: string,
@@ -50,10 +52,30 @@ export async function runClaim(
     });
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
+    
+    // Handle database errors with user-friendly message
     if (error?.code === "23505" || error?.message?.includes("unique")) {
-      throw Object.assign(new Error("Duplicate claim ID"), { status: 409 });
+      const userMessage = await generateErrorMessage(
+        "A claim with this ID already exists in our system. Please use a different claim ID or contact support if you believe this is an error.",
+        groqClient,
+        claimSlot
+      );
+      const dbError: any = new Error(userMessage);
+      dbError.status = 409;
+      dbError.originalError = "Duplicate claim ID";
+      throw dbError;
     }
-    throw err;
+    
+    // Generic database error handler
+    const userMessage = await generateErrorMessage(
+      `Database error occurred while processing your claim: ${error?.message || "Unknown error"}. Please try again later`,
+      groqClient,
+      claimSlot
+    );
+    const dbError: any = new Error(userMessage);
+    dbError.status = 500;
+    dbError.originalError = error?.message;
+    throw dbError;
   }
 
   // Image handling
@@ -324,4 +346,33 @@ function buildReason(
   parts.push(`Final damage: ${damage.finalDamageType}.`);
   parts.push(`Decision: ${payout.justification}`);
   return parts.join(" ");
+}
+
+async function generateErrorMessage(dbError: string, groqClient: any, keySlot: number): Promise<string> {
+  try {
+    const response = await groqCall(async () =>
+      groqClient.chat.completions.create({
+        model: MODELS.text,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a professional insurance customer support assistant. Convert technical database/system errors into clear, empathetic user-friendly messages. Be brief (one sentence max) and suggest next steps.",
+          },
+          {
+            role: "user",
+            content: `Convert this technical error into a user-friendly message: "${dbError}"`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 100,
+      })
+    );
+
+    const message = response.choices[0]?.message?.content?.trim();
+    return message || dbError;
+  } catch {
+    // Fallback if LLM call fails
+    return dbError;
+  }
 }

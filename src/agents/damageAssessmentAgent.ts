@@ -25,24 +25,45 @@ export async function damageAssessmentAgent(
   const hasImage = !!(imageBase64 && imageMediaType);
   const modelUsed = hasImage ? MODELS.vision : MODELS.text;
 
-  const systemPrompt = `You are an expert vehicle damage assessment specialist. Classify the damage severity and analyze the claim.
+  const systemPrompt = `You are a certified vehicle damage assessor with forensic expertise. Analyze damage with extreme scrutiny.
 
-Damage Classification:
-- Minor: scratches, scuffs, dents, broken mirrors, minor bumper damage
-- Moderate: panel damage, broken lights, non-structural body damage
-- Major: frame damage, engine damage, severe deformation, total loss
+DAMAGE CLASSIFICATION (strict standards):
+- Minor: Surface damage only - scratches, scuffs, dents <5cm, mirror damage, trim damage. Repair <10% of vehicle value
+- Moderate: Structural but non-frame - panel damage, broken lights/windows, suspension, no frame involvement. Repair 10-40% of vehicle value  
+- Major: Severe structural damage - frame damage, engine damage, severe deformation, potential total loss. Repair >40% of vehicle value
 
-${hasImage ? `If an image is provided, carefully examine it and:
-1. Determine if the image matches the described damage severity
-2. Flag any mismatch between the image and description
-3. Use the image as primary evidence` : ""}
+${hasImage ? `IMAGE ANALYSIS PROTOCOL:
+1. VERIFY IMAGE AUTHENTICITY:
+   - Check for photoshop/manipulation signs
+   - Verify lighting consistency
+   - Check for tampering indicators
+   
+2. MATCH TO DESCRIPTION:
+   - Does image match described damage? (CRITICAL)
+   - Severity must align
+   - If mismatch, flag as HIGH FRAUD INDICATOR
+   
+3. ASSESS FROM IMAGE:
+   - Is damage actually present?
+   - How severe is it really?
+   - Compare to claimed amount
+   
+4. CONFIDENCE SCORING:
+   - Image quality (0-1)
+   - Evidence clarity (0-1)
+   - Average as confidenceFromImage` : "No image provided - score confidence lower due to lack of visual evidence"}
 
-Return ONLY valid JSON with keys: finalDamageType (exactly "Minor", "Moderate", or "Major"), imageMatchesDescription (boolean), imageAnalysisSummary, confidenceFromImage (0-1), reasoning`;
+CRITICAL CHECK:
+- If description is vague but severity is "Major" = red flag
+- If claimAmount vastly exceeds damage visible = suspicious
+- If minor damage shown but Major claimed = DEFINITE FRAUD
+
+Return ONLY valid JSON with keys: finalDamageType (Minor|Moderate|Major), imageMatchesDescription (boolean or null if no image), imageAnalysisSummary (string), confidenceFromImage (0-1 or 0.5 if no image), verificationFlags (array), reasoning`;
 
   const userPrompt = `Claim ID: ${claimId}
 Description: ${description}
 Initial Severity Assessment: ${initialDamageSeverity}
-${hasImage ? "An image has been provided. Please analyze it carefully." : "No image provided. Assess based on description only."}`;
+${hasImage ? "IMAGE PROVIDED: Please analyze it very carefully for authenticity and match to description." : "NO IMAGE: Assess based on text description only - lower confidence expected"}`;
 
   try {
     let response;

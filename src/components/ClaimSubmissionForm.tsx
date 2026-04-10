@@ -61,6 +61,8 @@ export function ClaimSubmissionForm({
   );
   const [imageBase64, setImageBase64] = useState<string | undefined>(undefined);
   const [imageMediaType, setImageMediaType] = useState<string | undefined>(undefined);
+  const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ClaimResult | null>(null);
   const [steps, setSteps] = useState<AgentWorkflowStep[]>([]);
@@ -78,8 +80,39 @@ export function ClaimSubmissionForm({
       const mediaType = header.match(/:(.*?);/)?.[1] || "image/jpeg";
       setImageBase64(base64);
       setImageMediaType(mediaType);
+      setImagePreview(dataUrl);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDragDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const [header, base64] = dataUrl.split(",");
+        const mediaType = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+        setImageBase64(base64);
+        setImageMediaType(mediaType);
+        setImagePreview(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const clearImage = () => {
+    setImageBase64(undefined);
+    setImageMediaType(undefined);
+    setImagePreview(undefined);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const startPolling = useCallback((id: string) => {
@@ -264,18 +297,64 @@ export function ClaimSubmissionForm({
           </div>
 
           <div>
-            <label className={`block mb-1 font-medium ${fieldClass}`}>
+            <label className={`block mb-2 font-medium ${fieldClass}`}>
               Upload Image (optional)
             </label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
-            onChange={handleImageUpload}
-            className="text-xs w-full"
-          />
-          {imageBase64 && (
-            <p className="text-xs text-emerald-700 mt-1">Image ready for vision analysis</p>
-          )}
+            {!imagePreview ? (
+              <div
+                onDragOver={handleDragOver}
+                onDrop={handleDragDrop}
+                className="relative border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <svg
+                    className="w-8 h-8 text-muted-foreground/60"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium">Drag & drop image here or click to select</p>
+                    <p className="text-muted-foreground/70 mt-1">PNG or JPG (max 5MB)</p>
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+            ) : (
+              <div className="relative rounded-lg border border-border/60 overflow-hidden bg-muted/30 p-3">
+                <div className="relative w-full bg-black/10 rounded-md overflow-hidden">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-auto max-h-48 object-contain"
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xs text-emerald-700 font-medium">✓ Image ready for analysis</p>
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    className="text-xs px-3 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive font-medium transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {error && (

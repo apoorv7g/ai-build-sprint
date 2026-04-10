@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { chat_messages, chat_threads } from "@/db/schema";
+import { chat_messages, chat_threads, claims, claim_results } from "@/db/schema";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { getGroqClient, MODELS } from "@/lib/groq";
 import { groqCall } from "@/lib/groqCall";
@@ -88,6 +88,40 @@ export async function POST(
       content: msg.message,
     })) as Array<{ role: "assistant" | "user"; content: string }>;
 
+    // Fetch claim context if thread is linked to a claim
+    let claimContext = "";
+    if (thread[0].claim_id) {
+      try {
+        const claimRecord = await db
+          .select()
+          .from(claims)
+          .where(and(eq(claims.claim_id, thread[0].claim_id), eq(claims.user_id, user.id)))
+          .limit(1);
+
+        const claimResultRecord = await db
+          .select()
+          .from(claim_results)
+          .where(and(eq(claim_results.claim_id, thread[0].claim_id), eq(claim_results.user_id, user.id)))
+          .orderBy(desc(claim_results.created_at))
+          .limit(1);
+
+        if (claimRecord[0]) {
+          const claim = claimRecord[0];
+          const result = claimResultRecord[0];
+          claimContext = `\n\n---CLAIM CONTEXT---\nClaim ID: ${claim.claim_id}\nPolicy Type: ${claim.policy_type}\nClaim Amount: $${claim.claim_amount}\nPast Claims: ${claim.past_claims}\nDocuments Status: ${claim.documents_status}\nDescription: ${claim.description}`;
+
+          if (result) {
+            claimContext += `\n\nAnalysis Results:\n- Status: ${result.status}\n- Estimated Payout: $${result.estimated_payout}\n- Confidence Score: ${result.confidence_score}%\n- Damage Type: ${result.damage_type}\n- Coverage Valid: ${result.coverage_valid ? "Yes" : "No"}\n- Reason: ${result.reason}`;
+            if (result.fraud_flags && Object.keys(result.fraud_flags).length > 0) {
+              claimContext += `\n- Fraud Flags: ${JSON.stringify(result.fraud_flags)}`;
+            }
+          }
+        }
+      } catch {
+        // Silently fail - continue without claim context
+      }
+    }
+
     const aiText = await groqCall(async () => {
       const response = await getGroqClient().chat.completions.create({
         model: MODELS.text,
@@ -96,7 +130,18 @@ export async function POST(
           {
             role: "system",
             content:
-              "You are Cache Memory Assistant. Help users with insurance claim processing, payout interpretation, and next actions. Be concise and practical.",
+              "You are Cache Memory Assistant, an expert insurance specialist. Help users understand claim processing, payout decisions, and next steps.\n\n" +
+              "CRITICAL: You MUST format ALL responses using proper Markdown:\n" +
+              "- Use **bold** for important terms\n" +
+              "- Use *italic* for emphasis\n" +
+              "- Use # Heading 2, ## Heading 3 for sections\n" +
+              "- Use bullet points with - for lists\n" +
+              "- Use numbered lists 1. 2. 3. for steps\n" +
+              "- Use `code` for technical terms or claim IDs\n" +
+              "- Use > for blockquotes when highlighting key information\n" +
+              "- Use --- for section breaks\n\n" +
+              "Be concise, professional, and always cite claim-specific data when available." +
+              claimContext,
           },
           ...contextMessages,
         ],

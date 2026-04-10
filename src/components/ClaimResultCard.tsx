@@ -128,7 +128,7 @@ function AgentLogsTable({ steps }: { steps: AgentWorkflowStep[] }) {
             <TableCell>{step.stepNumber}</TableCell>
             <TableCell className="font-medium">{step.agentName}</TableCell>
             <TableCell className="text-xs">
-              {step.modelUsed?.includes("llama-4") ? "llama-4-scout" : "llama-3.3-70b"}
+              {step.modelUsed?.includes("llama-4") ? "llama-4-scout" : "gpt-oss-120b"}
             </TableCell>
             <TableCell>#{step.groqKeySlot + 1}</TableCell>
             <TableCell>{step.tokensUsed}</TableCell>
