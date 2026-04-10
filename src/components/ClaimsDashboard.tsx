@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { ScrollArea } from "./ui/scroll-area";
+import { Skeleton } from "./ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { ClaimResultCard } from "./ClaimResultCard";
@@ -109,35 +112,34 @@ export function ClaimsDashboard() {
   const filters = ["All", "Approved", "Rejected", "Pending"];
 
   return (
-    <div className="mt-8 space-y-4">
+    <div className="mt-2 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-lg font-semibold">Claims Dashboard</h2>
-        <div className="flex gap-1">
-          {filters.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                filter === f
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        <h2 className="text-2xl font-semibold">Claims Dashboard</h2>
+        <Tabs value={filter} onValueChange={setFilter}>
+          <TabsList className="bg-secondary/70">
+            {filters.map((f) => (
+              <TabsTrigger key={f} value={f} className="text-xs">
+                {f}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-gray-400">Loading...</div>
+        <div className="rounded-xl border border-border/60 bg-card/70 p-4 space-y-2">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </div>
       ) : claims.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 border rounded-lg">
+        <div className="text-center py-8 text-muted-foreground border border-border/60 rounded-xl bg-card/60">
           No claims found. Submit a claim to get started.
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
+        <div className="border border-border/60 rounded-xl overflow-hidden bg-card/70">
+          <ScrollArea className="max-h-[420px]">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Claim ID</TableHead>
@@ -195,15 +197,16 @@ export function ClaimsDashboard() {
                 </Dialog>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </ScrollArea>
         </div>
       )}
 
-      <div className="text-xs text-gray-400 text-right">
+      <div className="text-xs text-muted-foreground text-right">
         Total: {total} claim{total !== 1 ? "s" : ""}
         <button
           onClick={() => fetchClaims(filter)}
-          className="ml-3 text-blue-500 hover:underline"
+          className="ml-3 text-primary hover:underline"
         >
           Refresh
         </button>

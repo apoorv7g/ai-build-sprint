@@ -52,3 +52,22 @@ export const agent_logs = pgTable("agent_logs", {
   groq_key_slot: integer("groq_key_slot"),
   created_at: timestamp("created_at").defaultNow(),
 });
+
+export const chat_threads = pgTable("chat_threads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  thread_id: text("thread_id").unique().notNull(),
+  claim_id: text("claim_id").notNull().references(() => claims.claim_id),
+  title: text("title").notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const chat_messages = pgTable("chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  thread_id: text("thread_id")
+    .notNull()
+    .references(() => chat_threads.thread_id, { onDelete: "cascade" }),
+  sender: text("sender").notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"),
+  created_at: timestamp("created_at").defaultNow(),
+});

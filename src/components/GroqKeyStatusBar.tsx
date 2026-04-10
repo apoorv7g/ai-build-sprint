@@ -22,19 +22,31 @@ export function GroqKeyStatusBar({ keyStatuses }: GroqKeyStatusBarProps) {
   const statuses = keyStatuses || defaults;
 
   return (
-    <div className="flex items-center gap-3 text-xs">
+    <div className="border border-white/20 bg-white/10 px-2.5 py-1.5 backdrop-blur-sm">
+      <div className="flex items-center gap-2 text-[11px] sm:text-xs flex-wrap">
       {statuses.map((key) => (
-        <div key={key.slot} className="flex items-center gap-1">
+        <div
+          key={key.slot}
+          className={`inline-flex items-center gap-1.5 px-2 py-1 border ${
+            key.active
+              ? "bg-emerald-200/25 border-emerald-200/40 text-emerald-50"
+              : "bg-slate-400/10 border-slate-300/20 text-slate-200"
+          }`}
+        >
           <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              key.active ? "bg-green-400" : "bg-gray-400"
+            className={`inline-block w-1.5 h-1.5 ${
+              key.active ? "bg-emerald-300" : "bg-slate-400"
             }`}
           />
-          <span className={key.active ? "text-green-300" : "text-gray-400"}>
-            Key #{key.slot} {key.active ? "Active" : "Inactive"}
+          <span className="font-medium">
+            Key #{key.slot}
+          </span>
+          <span className={key.active ? "text-emerald-100" : "text-slate-300"}>
+            {key.active ? "Active" : "Inactive"}
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
 }

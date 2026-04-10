@@ -5,6 +5,9 @@ import { ClaimInput, ClaimResult, AgentWorkflowStep } from "@/types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Progress } from "./ui/progress";
+import { Separator } from "./ui/separator";
 import {
   Select,
   SelectContent,
@@ -40,6 +43,19 @@ function makeDefault(claim: Partial<ClaimInput>): ClaimFormState {
   };
 }
 
+function getErrorMessage(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (value && typeof value === "object" && "message" in value) {
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) return message;
+  }
+  try {
+    const json = JSON.stringify(value);
+    if (json && json !== "{}") return json;
+  } catch {}
+  return fallback;
+}
+
 function CompactClaimForm({
   value,
   onChange,
@@ -63,8 +79,8 @@ function CompactClaimForm({
   };
 
   return (
-    <div className="space-y-2 p-3 border rounded-lg bg-gray-50">
-      <h4 className="font-semibold text-sm text-blue-700">{label}</h4>
+    <div className="space-y-2 p-3 border border-border/60 rounded-xl bg-card/70">
+      <h4 className="font-semibold text-sm text-primary">{label}</h4>
 
       <div>
         <label className="block mb-0.5 font-medium text-xs">Claim ID</label>
@@ -253,18 +269,26 @@ export function TripleClaimPanel() {
         body: JSON.stringify({ claims: claimsPayload }),
       });
 
-      const data = await res.json();
+      const data: unknown = await res.json();
+      const dataError =
+        data && typeof data === "object" && "error" in data
+          ? (data as { error?: unknown }).error
+          : undefined;
 
       if (!res.ok) {
-        setError(data.error || "Batch processing failed");
+        setError(getErrorMessage(dataError, "Batch processing failed"));
         return;
       }
 
       setWallClockMs(Date.now() - wallStart);
-      setResults(data.results);
-      setCompletedCount(data.results.length);
-    } catch {
-      setError("Network error. Please try again.");
+      const resultList =
+        data && typeof data === "object" && "results" in data && Array.isArray((data as { results?: unknown }).results)
+          ? ((data as { results: ClaimResult[] }).results)
+          : [];
+      setResults(resultList);
+      setCompletedCount(resultList.length);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Network error. Please try again."));
     } finally {
       setLoading(false);
       // Stop polling
@@ -285,6 +309,13 @@ export function TripleClaimPanel() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">You</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Process three independent claims in parallel. Each column maps to one fixed Groq key slot.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {forms.map((form, i) => (
           <CompactClaimForm
@@ -297,44 +328,34 @@ export function TripleClaimPanel() {
       </div>
 
       {error && (
-        <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertTitle>Batch Validation Error</AlertTitle>
+          <AlertDescription>{String(error)}</AlertDescription>
+        </Alert>
       )}
 
       {loading && (
-        <div className="text-center py-3">
-          <div className="text-blue-600 font-medium text-sm">
-            ⟳ Processing 3 claims simultaneously...{" "}
-            <span className="text-gray-500">{completedCount}/3 complete</span>
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+          <div className="text-primary font-medium text-sm">
+            Processing 3 claims simultaneously... <span className="text-muted-foreground">{completedCount}/3 complete</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all"
-              style={{ width: `${(completedCount / 3) * 100}%` }}
-            />
-          </div>
+          <Progress value={(completedCount / 3) * 100} className="mt-2" />
         </div>
       )}
 
       <Button
         onClick={handleProcessAll}
         disabled={loading}
-        className="w-full text-base py-3 h-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+        className="w-full text-base py-3 h-auto bg-primary hover:bg-primary/90"
       >
-        {loading ? (
-          <span className="flex items-center gap-2">
-            <span className="animate-spin">⟳</span> Processing All 3 Claims Simultaneously...
-          </span>
-        ) : (
-          "⚡ Process All 3 Claims Now"
-        )}
+        {loading ? "Processing All 3 Claims..." : "Process All 3 Claims Now"}
       </Button>
 
-      {/* Agent Workflow Visualizers */}
       {(loading || stepsPerClaim.some((s) => s.length > 0)) && (
-        <div>
-          <h3 className="font-semibold text-sm text-gray-700 mb-3">Agent Pipelines (Running Simultaneously)</h3>
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ClaimIQ Assistant</p>
+          <h3 className="font-semibold text-sm text-foreground mt-2 mb-3">Agent Pipelines Running Simultaneously</h3>
+          <Separator className="mb-3" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {forms.map((form, i) => (
               <AgentWorkflowVisualizer
@@ -350,12 +371,12 @@ export function TripleClaimPanel() {
 
       {/* Results */}
       {results.some((r) => r !== null) && (
-        <div>
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-gray-700">Results</h3>
+            <h3 className="font-semibold text-sm text-foreground">Results</h3>
             {wallClockMs && (
-              <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded">
-                ✓ All 3 completed in {wallClockMs.toLocaleString()}ms (simultaneous)
+              <span className="text-xs text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded-full">
+                All 3 completed in {wallClockMs.toLocaleString()}ms (simultaneous)
               </span>
             )}
           </div>

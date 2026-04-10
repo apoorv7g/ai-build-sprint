@@ -5,6 +5,9 @@ import { ClaimResult, AgentWorkflowStep } from "@/types";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Progress } from "./ui/progress";
+import { ScrollArea } from "./ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 interface ClaimResultCardProps {
@@ -46,22 +49,27 @@ function ConfidenceBar({
         <span>Confidence</span>
         <span className="font-medium">{(score * 100).toFixed(0)}%</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className={`h-2 rounded-full ${color} transition-all`}
-          style={{ width: `${score * 100}%` }}
-        />
-      </div>
-      {breakdown && breakdown.length > 0 && (
-        <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-          {breakdown.map((f, i) => (
-            <div key={i} className="flex justify-between">
-              <span>{f.label}</span>
-              <span className="text-red-500">{f.delta.toFixed(2)}</span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <Progress value={score * 100} indicatorClassName={color} />
             </div>
-          ))}
-        </div>
-      )}
+          </TooltipTrigger>
+          {breakdown && breakdown.length > 0 && (
+            <TooltipContent>
+              <div className="space-y-1">
+                {breakdown.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3">
+                    <span>{f.label}</span>
+                    <span className="text-red-600">{f.delta.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }
@@ -147,17 +155,15 @@ function AgentLogsTable({ steps }: { steps: AgentWorkflowStep[] }) {
 
 export function ClaimResultCard({ result, compact = false }: ClaimResultCardProps) {
   return (
-    <div className="border rounded-lg p-4 space-y-4 bg-white shadow-sm">
-      {/* Header */}
+    <div className="border border-border/60 rounded-xl p-4 space-y-4 bg-card/90 shadow-lg shadow-slate-900/5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h3 className="font-bold text-lg">Claim {result.claimId}</h3>
-          <p className="text-xs text-gray-500">{result.processingTimeMs}ms total</p>
+          <p className="text-xs text-muted-foreground">{result.processingTimeMs}ms total</p>
         </div>
         <StatusBadge status={result.status} />
       </div>
 
-      {/* Payout */}
       <div className="text-center py-2">
         {result.estimatedPayout > 0 ? (
           <div className="text-3xl font-bold text-green-700">
@@ -168,39 +174,32 @@ export function ClaimResultCard({ result, compact = false }: ClaimResultCardProp
         )}
       </div>
 
-      {/* Confidence */}
       <ConfidenceBar score={result.confidenceScore} breakdown={result.confidenceBreakdown} />
 
-      {/* Damage type */}
       <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-600">Damage:</span>
+        <span className="text-sm text-muted-foreground">Damage:</span>
         <Badge variant="secondary">{result.damageType}</Badge>
         <Badge variant="secondary">Fraud: {result.fraudRisk}</Badge>
         <Badge variant="secondary">Key #{result.groqKeySlotUsed + 1}</Badge>
       </div>
 
-      {/* Fraud flags */}
       {result.fraudFlags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {result.fraudFlags.map((flag, i) => (
             <Badge key={i} variant="destructive" className="text-xs">
-              ⚠ {flag}
+              {flag}
             </Badge>
           ))}
         </div>
       )}
 
-      {/* Reason */}
-      <p className="text-sm text-gray-700 leading-relaxed">{result.reason}</p>
+      <p className="text-sm text-muted-foreground leading-relaxed">{result.reason}</p>
 
       {!compact && (
         <>
-          {/* Payout breakdown */}
           <PayoutTable result={result} />
 
-          {/* Action buttons */}
           <div className="flex gap-2 flex-wrap">
-            {/* Customer Letter Dialog */}
             <Dialog>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -211,13 +210,12 @@ export function ClaimResultCard({ result, compact = false }: ClaimResultCardProp
                 <DialogHeader>
                   <DialogTitle>{result.customerMessageSubject}</DialogTitle>
                 </DialogHeader>
-                <div className="text-sm whitespace-pre-wrap leading-relaxed bg-gray-50 p-4 rounded">
+                <div className="text-sm whitespace-pre-wrap leading-relaxed bg-secondary/60 p-4 rounded-lg">
                   {result.customerMessage}
                 </div>
               </DialogContent>
             </Dialog>
 
-            {/* Agent Logs Dialog */}
             {result.agentWorkflow.length > 0 && (
               <Dialog>
                 <DialogTrigger asChild>
@@ -229,7 +227,9 @@ export function ClaimResultCard({ result, compact = false }: ClaimResultCardProp
                   <DialogHeader>
                     <DialogTitle>Agent Logs — Claim {result.claimId}</DialogTitle>
                   </DialogHeader>
-                  <AgentLogsTable steps={result.agentWorkflow} />
+                  <ScrollArea className="max-h-[420px]">
+                    <AgentLogsTable steps={result.agentWorkflow} />
+                  </ScrollArea>
                 </DialogContent>
               </Dialog>
             )}
