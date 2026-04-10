@@ -5,6 +5,10 @@ import { ClaimInput, ClaimResult, AgentWorkflowStep } from "@/types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Progress } from "./ui/progress";
+import { ScrollArea } from "./ui/scroll-area";
+import { Skeleton } from "./ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -20,6 +24,19 @@ interface ClaimSubmissionFormProps {
   compact?: boolean;
   defaultValues?: Partial<ClaimInput>;
   formLabel?: string;
+}
+
+function getErrorMessage(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (value && typeof value === "object" && "message" in value) {
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) return message;
+  }
+  try {
+    const json = JSON.stringify(value);
+    if (json && json !== "{}") return json;
+  } catch {}
+  return fallback;
 }
 
 export function ClaimSubmissionForm({
@@ -48,6 +65,7 @@ export function ClaimSubmissionForm({
   const [result, setResult] = useState<ClaimResult | null>(null);
   const [steps, setSteps] = useState<AgentWorkflowStep[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [completion, setCompletion] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +101,8 @@ export function ClaimSubmissionForm({
             outputSummary: log.output_summary,
           }));
           setSteps(logs);
+          const done = logs.filter((s) => ["completed", "failed", "skipped"].includes(s.status)).length;
+          setCompletion(Math.round((done / 5) * 100));
         }
       } catch {}
     }, 1500);
@@ -93,6 +113,7 @@ export function ClaimSubmissionForm({
     setError(null);
     setResult(null);
     setSteps([]);
+    setCompletion(0);
 
     if (!claimId.trim()) {
       setError("Claim ID is required");
@@ -127,17 +148,21 @@ export function ClaimSubmissionForm({
         }),
       });
 
-      const data = await res.json();
+      const data: unknown = await res.json();
+      const dataError =
+        data && typeof data === "object" && "error" in data
+          ? (data as { error?: unknown }).error
+          : undefined;
 
       if (!res.ok) {
-        setError(data.error || "Processing failed");
+        setError(getErrorMessage(dataError, "Processing failed"));
         return;
       }
 
-      setResult(data);
-      if (onResult) onResult(data);
-    } catch {
-      setError("Network error. Please try again.");
+      setResult(data as ClaimResult);
+      if (onResult) onResult(data as ClaimResult);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Network error. Please try again."));
     } finally {
       setLoading(false);
       if (pollRef.current) {
@@ -151,10 +176,13 @@ export function ClaimSubmissionForm({
 
   return (
     <div className="space-y-4">
-      {formLabel && <h3 className="font-semibold text-sm text-gray-700">{formLabel}</h3>}
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Claim ID</label>
+      {formLabel && <h3 className="font-semibold text-sm text-muted-foreground">{formLabel}</h3>}
+
+      <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">You</p>
+        <form onSubmit={handleSubmit} className="mt-2 grid gap-3">
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Claim ID</label>
           <Input
             value={claimId}
             onChange={(e) => setClaimId(e.target.value)}
@@ -162,10 +190,10 @@ export function ClaimSubmissionForm({
             required
             className={fieldClass}
           />
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Incident Description</label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Incident Description</label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -173,10 +201,10 @@ export function ClaimSubmissionForm({
             rows={compact ? 2 : 3}
             className={fieldClass}
           />
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Policy Type</label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Policy Type</label>
           <Select
             value={policyType}
             onValueChange={(v) => setPolicyType(v as "Comprehensive" | "Third-Party")}
@@ -189,10 +217,10 @@ export function ClaimSubmissionForm({
               <SelectItem value="Third-Party">Third-Party</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Claim Amount (₹)</label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Claim Amount (₹)</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
             <Input
@@ -205,10 +233,10 @@ export function ClaimSubmissionForm({
               required
             />
           </div>
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Past Claims</label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Past Claims</label>
           <Input
             type="number"
             value={pastClaims}
@@ -217,10 +245,10 @@ export function ClaimSubmissionForm({
             max={20}
             className={fieldClass}
           />
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>Documents Status</label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>Documents Status</label>
           <Select
             value={documentsStatus}
             onValueChange={(v) => setDocumentsStatus(v as "Complete" | "Missing")}
@@ -233,12 +261,12 @@ export function ClaimSubmissionForm({
               <SelectItem value="Missing">Missing</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+          </div>
 
-        <div>
-          <label className={`block mb-1 font-medium ${fieldClass}`}>
-            Upload Image (optional)
-          </label>
+          <div>
+            <label className={`block mb-1 font-medium ${fieldClass}`}>
+              Upload Image (optional)
+            </label>
           <input
             type="file"
             accept="image/jpeg,image/png"
@@ -246,39 +274,48 @@ export function ClaimSubmissionForm({
             className="text-xs w-full"
           />
           {imageBase64 && (
-            <p className="text-xs text-green-600 mt-1">✓ Image ready for vision analysis</p>
+            <p className="text-xs text-emerald-700 mt-1">Image ready for vision analysis</p>
           )}
-        </div>
-
-        {error && (
-          <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded p-2">
-            {error}
           </div>
-        )}
 
-        <Button type="submit" disabled={loading} className="w-full">
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="animate-spin">⟳</span> Processing...
-            </span>
-          ) : (
-            "Submit Claim"
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Submission Error</AlertTitle>
+              <AlertDescription>{String(error)}</AlertDescription>
+            </Alert>
           )}
-        </Button>
-      </form>
+
+          <Button type="submit" disabled={loading} className="w-full bg-primary/95 hover:bg-primary">
+            {loading ? "Running 5-agent pipeline..." : "Submit Claim"}
+          </Button>
+        </form>
+      </div>
 
       {(loading || steps.length > 0) && (
-        <div className="mt-4">
-          <AgentWorkflowVisualizer
-            claimId={claimId}
-            steps={steps}
-            isPolling={loading}
-          />
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ClaimIQ Assistant</p>
+          <div className="mt-2 space-y-2">
+            <div className="text-sm text-muted-foreground">Interpreting intent, validating policy and computing payout decision.</div>
+            <Progress value={completion} />
+            <div className="text-xs text-muted-foreground">Pipeline completion: {completion}%</div>
+          </div>
+
+          <ScrollArea className="max-h-[460px] mt-4 pr-1">
+            <AgentWorkflowVisualizer claimId={claimId} steps={steps} isPolling={loading} />
+          </ScrollArea>
+        </div>
+      )}
+
+      {loading && !result && (
+        <div className="rounded-2xl border border-border/60 bg-card/70 p-4 space-y-3">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       )}
 
       {result && !loading && (
-        <div className="mt-4">
+        <div className="mt-2 rounded-2xl border border-border/60 bg-card/80 p-3">
           <ClaimResultCard result={result} />
         </div>
       )}

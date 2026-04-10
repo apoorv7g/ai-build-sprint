@@ -32,16 +32,16 @@ function StepNode({
 
   const bgColor =
     isSkipped
-      ? "bg-gray-100 border-dashed border-gray-300 text-gray-400"
+      ? "bg-muted/40 border-dashed border-border text-muted-foreground"
       : status === "waiting"
-      ? "bg-gray-100 border-gray-300 text-gray-500"
+      ? "bg-muted/40 border-border text-muted-foreground"
       : status === "running"
-      ? "bg-blue-50 border-blue-400 text-blue-700 animate-pulse"
+      ? "bg-cyan-50 border-cyan-500 text-cyan-800 animate-pulse"
       : status === "completed"
-      ? "bg-green-50 border-green-400 text-green-700"
+      ? "bg-emerald-50 border-emerald-500 text-emerald-800"
       : status === "failed"
-      ? "bg-red-50 border-red-400 text-red-700"
-      : "bg-gray-100 border-gray-300 text-gray-500";
+      ? "bg-red-50 border-red-500 text-red-700"
+      : "bg-muted/40 border-border text-muted-foreground";
 
   const icon =
     isSkipped
@@ -57,15 +57,13 @@ function StepNode({
       : "○";
 
   return (
-    <div
-      className={`border-2 rounded-lg p-3 text-sm w-full ${bgColor}`}
-    >
+    <div className={`border-2 rounded-xl p-3 text-sm w-full ${bgColor}`}>
       <div className="flex items-center gap-2">
         <span className="text-lg font-bold">{icon}</span>
         <div className="flex-1 min-w-0">
           <div className="font-semibold truncate">{step ? AGENT_LABELS[step.stepNumber] : "Waiting..."}</div>
           {step && step.status === "completed" && (
-            <div className="text-xs mt-1 space-y-0.5 text-gray-500">
+            <div className="text-xs mt-1 space-y-0.5 text-muted-foreground">
               <div className="truncate">
                 Model: {step.modelUsed?.includes("llama-4") ? "llama-4-scout" : "llama-3.3-70b"}
               </div>
@@ -75,7 +73,7 @@ function StepNode({
                 <span>{step.tokensUsed} tokens</span>
               </div>
               {step.modelUsed?.includes("llama-4") && (
-                <span className="inline-block bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded-full">
+                <span className="inline-block bg-amber-100 text-amber-800 text-xs px-1.5 py-0.5 rounded-full">
                   Vision Model
                 </span>
               )}
@@ -95,7 +93,7 @@ function Arrow() {
   return (
     <div className="flex items-center justify-center py-1">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2 L10 15 M6 12 L10 16 L14 12" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10 2 L10 15 M6 12 L10 16 L14 12" stroke="#5b6f76" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
   );
@@ -108,16 +106,16 @@ function DecisionDiamond({ valid }: { valid?: boolean | null }) {
         <svg viewBox="0 0 96 48" className="absolute inset-0 w-full h-full">
           <polygon
             points="48,4 92,24 48,44 4,24"
-            fill={valid === true ? "#dcfce7" : valid === false ? "#fef2f2" : "#f9fafb"}
-            stroke={valid === true ? "#16a34a" : valid === false ? "#dc2626" : "#9ca3af"}
+            fill={valid === true ? "#dcfce7" : valid === false ? "#fef2f2" : "#f5f5f4"}
+            stroke={valid === true ? "#16a34a" : valid === false ? "#dc2626" : "#8ca3aa"}
             strokeWidth="2"
           />
         </svg>
-        <span className="relative z-10 text-xs font-medium text-gray-700 text-center leading-tight px-2">
+        <span className="relative z-10 text-xs font-medium text-slate-700 text-center leading-tight px-2">
           Valid?
         </span>
       </div>
-      <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
         <span className="text-green-600">YES ↓</span>
         <span className="text-red-600">NO →</span>
       </div>
@@ -138,11 +136,11 @@ export function AgentWorkflowVisualizer({
   const allDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "failed" || s.status === "skipped");
 
   return (
-    <div className="w-full max-w-xs mx-auto">
-      <div className="text-xs text-center text-gray-500 mb-2 font-medium">
+    <div className="w-full max-w-xs mx-auto rounded-2xl border border-border/60 bg-card/80 p-3">
+      <div className="text-xs text-center text-muted-foreground mb-2 font-medium">
         Claim {claimId} — Agent Pipeline
         {isPolling && !allDone && (
-          <span className="ml-2 inline-block w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+          <span className="ml-2 inline-block w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
         )}
       </div>
 
@@ -196,7 +194,7 @@ export function AgentWorkflowVisualizer({
 
       {allDone && (
         <div className="mt-3 text-center">
-          <span className="text-xs text-green-600 font-medium">✓ Pipeline Complete</span>
+          <span className="text-xs text-emerald-700 font-medium">Pipeline Complete</span>
         </div>
       )}
     </div>

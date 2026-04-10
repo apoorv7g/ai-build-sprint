@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --background: 43 27% 95%;
+    --foreground: 204 26% 16%;
+    --card: 42 26% 97%;
+    --card-foreground: 204 26% 16%;
+    --popover: 42 26% 97%;
+    --popover-foreground: 204 26% 16%;
+    --primary: 194 55% 32%;
+    --primary-foreground: 44 42% 95%;
+    --secondary: 189 22% 90%;
+    --secondary-foreground: 201 32% 20%;
+    --muted: 39 24% 90%;
+    --muted-foreground: 204 16% 35%;
+    --accent: 17 62% 50%;
+    --accent-foreground: 33 62% 95%;
+    --destructive: 7 73% 47%;
+    --destructive-foreground: 42 26% 97%;
+    --border: 196 23% 80%;
+    --input: 196 23% 80%;
+    --ring: 194 55% 32%;
+    --radius: 0.85rem;
   }
 }
 
@@ -33,12 +33,109 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-body), sans-serif;
+    background-image: radial-gradient(circle at 14% 18%, rgba(18, 104, 120, 0.1), transparent 38%),
+      radial-gradient(circle at 80% 16%, rgba(218, 97, 47, 0.09), transparent 34%),
+      linear-gradient(140deg, rgba(255, 255, 255, 0.75) 0%, rgba(244, 238, 228, 0.7) 100%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading), serif;
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
+  .hard-edge * {
+    border-radius: 0 !important;
+  }
+
   .text-balance {
     text-wrap: balance;
+  }
+
+  .atmo-panel {
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.84), rgba(245, 238, 228, 0.74));
+    border: 1px solid rgba(84, 120, 128, 0.22);
+    box-shadow: 0 14px 40px rgba(39, 63, 70, 0.1);
+    backdrop-filter: blur(6px);
+  }
+
+  .panel-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    pointer-events: none;
+  }
+
+  .grain-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(23, 51, 57, 0.06) 0.55px, transparent 0.55px);
+    background-size: 3px 3px;
+    opacity: 0.36;
+  }
+
+  .manifesto-heading {
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+  }
+
+  .bracket-badge {
+    position: relative;
+  }
+
+  .bracket-badge::before,
+  .bracket-badge::after {
+    font-size: 0.65rem;
+    opacity: 0.75;
+  }
+
+  .bracket-badge::before {
+    content: "[";
+    margin-right: 0.2rem;
+  }
+
+  .bracket-badge::after {
+    content: "]";
+    margin-left: 0.2rem;
+  }
+
+  .mesh-band {
+    background-image: radial-gradient(circle at 20% 20%, rgba(18, 104, 120, 0.26), transparent 30%),
+      radial-gradient(circle at 84% 0%, rgba(219, 132, 71, 0.28), transparent 30%),
+      linear-gradient(120deg, rgba(20, 89, 103, 0.85), rgba(26, 67, 78, 0.92));
+  }
+
+  .soft-grid {
+    background-image: linear-gradient(rgba(35, 69, 77, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(35, 69, 77, 0.08) 1px, transparent 1px);
+    background-size: 18px 18px;
+    background-position: center;
+  }
+
+  .dotted-atmo {
+    background-image: radial-gradient(circle at 15% 22%, rgba(20, 101, 118, 0.14), transparent 33%),
+      radial-gradient(circle at 85% 0%, rgba(210, 109, 52, 0.16), transparent 34%),
+      radial-gradient(rgba(28, 58, 65, 0.07) 0.45px, transparent 0.45px);
+    background-size: auto, auto, 6px 6px;
+  }
+
+  .lift-hover {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .lift-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 48px rgba(28, 52, 58, 0.16);
   }
 }
